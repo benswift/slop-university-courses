@@ -14,7 +14,8 @@
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "test": "vitest run",
-    "catalogue:sync": "tsx scripts/sync-courses.ts"
+    "catalogue:sync": "tsx scripts/sync-courses.ts && pnpm cards:capture",
+    "cards:capture": "tsx scripts/capture-cards.ts"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.4",

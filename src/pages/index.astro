@@ -1,9 +1,19 @@
 ---
 import BaseLayout from "astro-theme-university/layouts/BaseLayout.astro";
 import hero from "../assets/heroes/catalogue.avif";
+import { Image } from "astro:assets";
 import catalogueData from "../data/catalogue.json";
 import type { CatalogueEntry } from "../lib/catalogue";
 import { siteConfig } from "../site-config";
+
+// Captured by `pnpm cards:capture`, named by course code. Eager-globbed rather
+// than looked up at runtime because Astro optimises an imported image and
+// cannot see a path it only learns about in the browser. A course without a
+// card is a course whose site emits no og:image; its card goes without one.
+const cards = import.meta.glob<{ default: ImageMetadata }>("../assets/cards/*.jpg", {
+  eager: true,
+});
+const cardFor = (code: string) => cards[`../assets/cards/${code}.jpg`]?.default;
 
 // The sync validates every entry before it is written, so this reads the file
 // rather than re-parsing it: revalidating here would only let one bad row fail
@@ -25,35 +35,127 @@ const courses = catalogueData as CatalogueEntry[];
       <p class="lede">A complete register of courses somebody went to the trouble of inventing.</p>
     </header>
     <form class="filters" data-filters>
-      <label>Search <input type="search" name="query" placeholder="Code, title or tag" /></label>
+      <label class="wide">Search <input type="search" name="query" placeholder="Code, title or tag" aria-label="Search courses by code, title or tag" /></label>
       <label>Level <select name="level"><option value="">All levels</option>{[1,2,3,4,6,7,8].map((level) => <option value={level}>{level}000</option>)}</select></label>
+      <label class="check"><input type="checkbox" name="fave" /> My SlopU</label>
+      <label class="check"><input type="checkbox" name="agent" /> Crit agents only</label>
+      <button type="button" class="reset" data-reset hidden>Clear filters</button>
     </form>
     <p class="count" aria-live="polite" data-count>{courses.length} courses</p>
     <div class="grid" data-grid>
-      {courses.map(({ feed: { course, canonicalUrl }, agent }) => (
-        <article data-course data-search={`${course.code} ${course.title} ${course.tags.join(" ")}`.toLowerCase()} data-level={course.level}>
-          <p class="code">{course.code}{agent && <span class="by-agent">agent-authored</span>}</p><h2><a href={canonicalUrl}>{course.title}</a></h2>
-          <p>{course.description}</p><p class="meta">Level {course.level} · {course.session} {course.year}</p>
-          <ul>{course.tags.map((tag) => <li>{tag}</li>)}</ul>
+      {courses.map(({ feed: { course, canonicalUrl }, agent }) => {
+        const card = cardFor(course.code);
+        return (
+        <article data-course data-search={`${course.code} ${course.title} ${course.tags.join(" ")}`.toLowerCase()} data-level={course.level} data-agent={agent ? "true" : "false"} data-code={course.code}>
+          {card && <Image src={card} alt="" widths={[400, 800]} sizes="(max-width: 40rem) 100vw, 24rem" class="card-art" loading="lazy" />}
+          <button type="button" class="fave" data-fave={course.code} aria-pressed="false" aria-label={`Add ${course.title} to My SlopU`}>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 21C12 21 3 14.6 3 8.9 3 5.6 5.6 3 8.7 3c1.9 0 3.3 1 4.3 2.2C13.9 4 15.4 3 17.3 3 20.4 3 23 5.6 23 8.9 23 14.6 12 21 12 21Z" /></svg>
+          </button>
+          <div class="body">
+            <p class="code">{course.code}{agent && <span class="by-agent">agent-authored</span>}</p><h2><a href={canonicalUrl}>{course.title}</a></h2>
+            <p>{course.description}</p><p class="meta">Level {course.level} · {course.session} {course.year}</p>
+            <ul>{course.tags.map((tag) => <li>{tag}</li>)}</ul>
+          </div>
         </article>
-      ))}
+        );
+      })}
     </div>
     {courses.length === 0 && <p class="empty">The register opens after the first course publication round.</p>}
+    <p class="empty" data-none hidden>Nothing matches those filters.</p>
   </div>
 </BaseLayout>
 
 <script>
+  const STORE = "slopu:favourites";
+
+  // Per-viewer convenience, so a blocked or cleared store must degrade to "no
+  // favourites yet" rather than breaking the page. Every access is guarded:
+  // a private window throws on read as readily as on write.
+  const readFaves = (): Set<string> => {
+    try {
+      const raw = localStorage.getItem(STORE);
+      return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      return new Set();
+    }
+  };
+  const writeFaves = (faves: Set<string>) => {
+    try {
+      localStorage.setItem(STORE, JSON.stringify([...faves]));
+    } catch {
+      /* Nothing to do: the toggle still works for this page view. */
+    }
+  };
+
   const form = document.querySelector<HTMLFormElement>("[data-filters]");
   const cards = [...document.querySelectorAll<HTMLElement>("[data-course]")];
   const count = document.querySelector<HTMLElement>("[data-count]");
-  form?.addEventListener("input", () => {
-    const data = new FormData(form); const query = String(data.get("query") ?? "").trim().toLowerCase(); const level = String(data.get("level") ?? "");
+  const none = document.querySelector<HTMLElement>("[data-none]");
+  const reset = document.querySelector<HTMLButtonElement>("[data-reset]");
+  let faves = readFaves();
+
+  const paintFave = (button: HTMLButtonElement) => {
+    const code = button.dataset.fave ?? "";
+    const on = faves.has(code);
+    button.setAttribute("aria-pressed", String(on));
+    const title = button.closest("article")?.querySelector("h2")?.textContent?.trim() ?? code;
+    button.setAttribute("aria-label", `${on ? "Remove" : "Add"} ${title} ${on ? "from" : "to"} My SlopU`);
+  };
+
+  const apply = () => {
+    if (!form) return;
+    const data = new FormData(form);
+    const query = String(data.get("query") ?? "").trim().toLowerCase();
+    const level = String(data.get("level") ?? "");
+    const onlyFaves = data.get("fave") === "on";
+    const onlyAgents = data.get("agent") === "on";
     let visible = 0;
-    for (const card of cards) { const show = (!query || card.dataset.search?.includes(query)) && (!level || card.dataset.level === level); card.hidden = !show; if (show) visible++; }
+    for (const card of cards) {
+      const show =
+        (!query || card.dataset.search?.includes(query)) &&
+        (!level || card.dataset.level === level) &&
+        (!onlyFaves || faves.has(card.dataset.code ?? "")) &&
+        (!onlyAgents || card.dataset.agent === "true");
+      card.hidden = !show;
+      if (show) visible++;
+    }
     if (count) count.textContent = `${visible} course${visible === 1 ? "" : "s"}`;
+    if (none) none.hidden = visible > 0 || cards.length === 0;
+    const filtering = Boolean(query || level || onlyFaves || onlyAgents);
+    if (reset) reset.hidden = !filtering;
+  };
+
+  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-fave]")) {
+    paintFave(button);
+    button.addEventListener("click", () => {
+      const code = button.dataset.fave ?? "";
+      if (faves.has(code)) faves.delete(code);
+      else faves.add(code);
+      writeFaves(faves);
+      paintFave(button);
+      // A card can filter itself out from under the pointer, which is the
+      // point of "My SlopU" --- unfavouriting inside it should remove the card.
+      apply();
+    });
+  }
+
+  form?.addEventListener("input", apply);
+  reset?.addEventListener("click", () => {
+    form?.reset();
+    apply();
   });
+
+  // Another tab's toggle is the same viewer's list.
+  window.addEventListener("storage", (event) => {
+    if (event.key !== STORE) return;
+    faves = readFaves();
+    for (const button of document.querySelectorAll<HTMLButtonElement>("[data-fave]")) paintFave(button);
+    apply();
+  });
+
+  apply();
 </script>
 
 <style>
-  .catalogue{width:min(72rem,calc(100% - 2rem));margin-inline:auto;padding-block:clamp(2rem,4vw,3.5rem) clamp(3rem,8vw,7rem)}.code{font-weight:800;letter-spacing:.08em;text-transform:uppercase}.lede{font-size:clamp(1.15rem,2vw,1.5rem);max-width:42rem}.filters{display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin:3rem 0 1rem;padding:1rem;background:var(--at-bg-alt);border:1px solid currentColor}.filters label{display:grid;gap:.35rem;font-weight:700}.filters input,.filters select{min-height:44px;padding:.65rem;border:1px solid currentColor;background:var(--at-bg-elevated);color:var(--at-text);font:inherit}.by-agent{margin-inline-start:.5rem;padding:.1rem .4rem;border:1px solid currentColor;border-radius:999px;font-size:.7rem;font-weight:650;letter-spacing:.04em;text-transform:none;vertical-align:middle}.count{font-variant-numeric:tabular-nums}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:1rem}.grid article{padding:1.25rem;border:1px solid currentColor}.grid h2{margin-top:.25rem}.meta{font-weight:650}.grid ul{display:flex;flex-wrap:wrap;gap:.4rem;padding:0;list-style:none}.grid li{padding:.2rem .5rem;border:1px solid currentColor;border-radius:999px;font-size:.85rem}.empty{padding:3rem 0;font-size:1.2rem}@media(max-width:40rem){.filters{grid-template-columns:1fr}}
+  .catalogue{width:min(72rem,calc(100% - 2rem));margin-inline:auto;padding-block:clamp(2rem,4vw,3.5rem) clamp(3rem,8vw,7rem)}.code{font-weight:800;letter-spacing:.08em;text-transform:uppercase}.lede{font-size:clamp(1.15rem,2vw,1.5rem);max-width:42rem}.filters{display:grid;grid-template-columns:2fr 1fr auto auto auto;align-items:end;gap:1rem;margin:3rem 0 1rem;padding:1rem;background:var(--at-bg-alt);border:1px solid currentColor}.filters label{display:grid;gap:.35rem;font-weight:700}.filters label.check{grid-auto-flow:column;align-items:center;justify-content:start;gap:.45rem;white-space:nowrap}.filters input[type=search],.filters select{min-height:44px;padding:.65rem;border:1px solid currentColor;background:var(--at-bg-elevated);color:var(--at-text);font:inherit}.filters input[type=checkbox]{width:1.15rem;height:1.15rem;accent-color:var(--at-primary)}.reset{min-height:44px;padding:.65rem .9rem;border:1px solid currentColor;background:none;color:inherit;font:inherit;font-weight:700;cursor:pointer}.reset:hover{background:var(--at-bg-elevated)}.by-agent{margin-inline-start:.5rem;padding:.1rem .4rem;border:1px solid currentColor;border-radius:999px;font-size:.7rem;font-weight:650;letter-spacing:.04em;text-transform:none;vertical-align:middle}.count{font-variant-numeric:tabular-nums}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:1rem}.grid article{position:relative;display:flex;flex-direction:column;min-width:0;border:1px solid currentColor;overflow:hidden}.card-art{display:block;width:100%;min-width:0;aspect-ratio:1200/630;object-fit:cover;border-block-end:1px solid currentColor}.grid .body{padding:1.25rem}.fave{position:absolute;inset-block-start:.6rem;inset-inline-end:.6rem;display:grid;place-items:center;width:2.5rem;height:2.5rem;padding:0;border:1px solid currentColor;border-radius:999px;background:var(--at-bg);color:inherit;cursor:pointer}.fave svg{width:1.3rem;height:1.3rem;fill:none;stroke:currentColor;stroke-width:1.8}.fave[aria-pressed=true]{color:var(--at-primary)}.fave[aria-pressed=true] svg{fill:currentColor}.fave:hover{background:var(--at-bg-elevated)}.grid h2{margin-top:.25rem}.meta{font-weight:650}.grid ul{display:flex;flex-wrap:wrap;gap:.4rem;padding:0;list-style:none}.grid li{padding:.2rem .5rem;border:1px solid currentColor;border-radius:999px;font-size:.85rem}.empty{padding:3rem 0;font-size:1.2rem}@media(max-width:60rem){.filters{grid-template-columns:1fr 1fr}.filters .wide{grid-column:1/-1}.reset{grid-column:1/-1}}@media(max-width:40rem){.filters{grid-template-columns:1fr}}
 </style>
