@@ -26,7 +26,7 @@ const cached = new Map<string, CatalogueEntry>(
 type Fetched = { candidate: Candidate; reused: boolean } | { apiUrl: string; error: string };
 
 const results = await Promise.all(
-  sources.map(async ({ apiUrl, sourceUrl }): Promise<Fetched> => {
+  sources.map(async ({ apiUrl, sourceUrl, agent }): Promise<Fetched> => {
     const previous = cached.get(apiUrl);
     try {
       const response = await fetch(apiUrl, {
@@ -41,7 +41,10 @@ const results = await Promise.all(
       }
       if (!response.ok) return { apiUrl, error: `${response.status} ${response.statusText}` };
       const etag = response.headers.get("etag") ?? undefined;
-      return { candidate: { apiUrl, sourceUrl, etag, feed: await response.json() }, reused: false };
+      return {
+        candidate: { apiUrl, sourceUrl, agent, etag, feed: await response.json() },
+        reused: false,
+      };
     } catch (error) {
       return { apiUrl, error: (error as Error).message };
     }

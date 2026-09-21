@@ -62,10 +62,30 @@ describe("catalogue contract", () => {
     const broken = candidate("SLOP3001");
     broken.feed = {
       ...feed("SLOP3001"),
-      course: { ...feed("SLOP3001").course, description: "too short" },
+      course: { ...feed("SLOP3001").course, tags: [] },
     };
     const { entries, rejected } = validateCatalogue([candidate(), broken]);
     expect(entries).toHaveLength(1);
     expect(rejected).toHaveLength(1);
+  });
+
+  it("takes a description the course site's own bound would have refused", () => {
+    // The site validates its own record at build time; a site that widened
+    // that bound is a matter for its author, not a course the catalogue drops.
+    const wide = candidate("SLOP3002");
+    wide.feed = {
+      ...feed("SLOP3002"),
+      course: { ...feed("SLOP3002").course, description: "Short." },
+    };
+    expect(validateCatalogue([wide]).rejected).toEqual([]);
+  });
+
+  it("carries the agent flag through, and omits it for a student course", () => {
+    const { entries } = validateCatalogue([
+      candidate("SLOP1001", { agent: true }),
+      candidate("SLOP1002"),
+    ]);
+    expect(entries.find((e) => e.feed.course.code === "SLOP1001")?.agent).toBe(true);
+    expect(entries.find((e) => e.feed.course.code === "SLOP1002")).not.toHaveProperty("agent");
   });
 });

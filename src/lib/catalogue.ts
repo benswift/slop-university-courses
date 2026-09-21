@@ -19,7 +19,11 @@ export const courseSchema = z.strictObject({
     ]),
     startDate: z.iso.date(),
     endDate: z.iso.date(),
-    description: z.string().min(80).max(300),
+    // Wide on purpose. The course site validates its own record at build
+    // time, and a site that relaxed that bound is a matter for its author,
+    // not something the catalogue should answer by dropping the course. The
+    // cap only guards the card layout against a pathological feed.
+    description: z.string().min(1).max(1000),
     tags: z.array(z.string().min(2).max(24)).min(1).max(3),
     learningOutcomes: z.array(z.string()),
   }),
@@ -34,6 +38,11 @@ export const courseSchema = z.strictObject({
 export const sourceSchema = z.strictObject({
   apiUrl: z.url(),
   sourceUrl: z.url(),
+  // Marks a course built by one of the studio's own agents rather than a
+  // student. It lives here and not in the feed because a course site has no
+  // way to know which it is --- the distinction belongs to whoever registered
+  // it for publication.
+  agent: z.boolean().optional(),
 });
 
 // The checked-in catalogue keeps each feed next to the source it came from and
@@ -42,6 +51,7 @@ export const sourceSchema = z.strictObject({
 export const entrySchema = z.strictObject({
   apiUrl: z.url(),
   sourceUrl: z.url(),
+  agent: z.boolean().optional(),
   etag: z.string().optional(),
   feed: courseSchema,
 });
@@ -53,6 +63,7 @@ export type CatalogueEntry = z.infer<typeof entrySchema>;
 export interface Candidate {
   apiUrl: string;
   sourceUrl: string;
+  agent?: boolean;
   etag?: string;
   feed: unknown;
 }
@@ -78,7 +89,7 @@ export function validateCatalogue(candidates: Candidate[]): {
   const rejected: Rejection[] = [];
   const claimed = new Map<string, string>();
 
-  for (const { apiUrl, sourceUrl, etag, feed } of candidates) {
+  for (const { apiUrl, sourceUrl, agent, etag, feed } of candidates) {
     const parsed = courseSchema.safeParse(feed);
     if (!parsed.success) {
       const reason = parsed.error.issues
@@ -104,7 +115,13 @@ export function validateCatalogue(candidates: Candidate[]): {
     }
 
     claimed.set(code, apiUrl);
-    entries.push({ apiUrl, sourceUrl, ...(etag !== undefined && { etag }), feed: parsed.data });
+    entries.push({
+      apiUrl,
+      sourceUrl,
+      ...(agent === true && { agent }),
+      ...(etag !== undefined && { etag }),
+      feed: parsed.data,
+    });
   }
 
   return {
