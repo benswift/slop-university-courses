@@ -1,5 +1,6 @@
 ---
 import BaseLayout from "astro-theme-university/layouts/BaseLayout.astro";
+import hero from "../assets/heroes/catalogue.avif";
 import catalogueData from "../data/catalogue.json";
 import type { CatalogueEntry } from "../lib/catalogue";
 import { siteConfig } from "../site-config";
@@ -14,12 +15,13 @@ const courses = catalogueData as CatalogueEntry[];
 <BaseLayout
   title="Programs and courses"
   description="Find a course at Slop University by level, session or subject."
+  heroTitle="Programs and courses"
+  heroImage={hero}
+  heroImageAlt="Three figures working a wall of card-catalogue drawers, one on a ladder, loose cards fanned across the counter below"
   {...siteConfig}
 >
   <div class="catalogue">
     <header>
-      <p class="eyebrow">Slop University</p>
-      <h1>Programs and courses</h1>
       <p class="lede">A complete register of courses somebody went to the trouble of inventing.</p>
     </header>
     <form class="filters" data-filters>
@@ -53,5 +55,5 @@ const courses = catalogueData as CatalogueEntry[];
 </script>
 
 <style>
-  .catalogue{width:min(72rem,calc(100% - 2rem));margin-inline:auto;padding:clamp(3rem,8vw,7rem) 0}.eyebrow,.code{font-weight:800;letter-spacing:.08em;text-transform:uppercase}.lede{font-size:clamp(1.15rem,2vw,1.5rem);max-width:42rem}.filters{display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin:3rem 0 1rem;padding:1rem;background:var(--at-bg-alt);border:1px solid currentColor}.filters label{display:grid;gap:.35rem;font-weight:700}.filters input,.filters select{min-height:44px;padding:.65rem;border:1px solid currentColor;background:var(--at-bg-elevated);color:var(--at-text);font:inherit}.count{font-variant-numeric:tabular-nums}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:1rem}.grid article{padding:1.25rem;border:1px solid currentColor}.grid h2{margin-top:.25rem}.meta{font-weight:650}.grid ul{display:flex;flex-wrap:wrap;gap:.4rem;padding:0;list-style:none}.grid li{padding:.2rem .5rem;border:1px solid currentColor;border-radius:999px;font-size:.85rem}.empty{padding:3rem 0;font-size:1.2rem}@media(max-width:40rem){.filters{grid-template-columns:1fr}}
+  .catalogue{width:min(72rem,calc(100% - 2rem));margin-inline:auto;padding-block:clamp(2rem,4vw,3.5rem) clamp(3rem,8vw,7rem)}.code{font-weight:800;letter-spacing:.08em;text-transform:uppercase}.lede{font-size:clamp(1.15rem,2vw,1.5rem);max-width:42rem}.filters{display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin:3rem 0 1rem;padding:1rem;background:var(--at-bg-alt);border:1px solid currentColor}.filters label{display:grid;gap:.35rem;font-weight:700}.filters input,.filters select{min-height:44px;padding:.65rem;border:1px solid currentColor;background:var(--at-bg-elevated);color:var(--at-text);font:inherit}.count{font-variant-numeric:tabular-nums}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:1rem}.grid article{padding:1.25rem;border:1px solid currentColor}.grid h2{margin-top:.25rem}.meta{font-weight:650}.grid ul{display:flex;flex-wrap:wrap;gap:.4rem;padding:0;list-style:none}.grid li{padding:.2rem .5rem;border:1px solid currentColor;border-radius:999px;font-size:.85rem}.empty{padding:3rem 0;font-size:1.2rem}@media(max-width:40rem){.filters{grid-template-columns:1fr}}
 </style>
