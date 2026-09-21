@@ -57,6 +57,9 @@ const fetched = results.filter(
 );
 const { entries, rejected } = validateCatalogue(fetched.map((r) => r.candidate));
 
+// Written by the sync, not by hand, so it is excluded from the formatter in
+// .oxfmtrc.json --- otherwise every sync leaves the tree unformatted and the
+// next push fails its format check, which is exactly what it did once.
 // Only rewrite when something actually changed: an unchanged catalogue that
 // rewrites itself every run produces a commit, a rebuild and a redeploy for
 // nothing.
