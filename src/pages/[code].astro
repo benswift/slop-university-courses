@@ -1,0 +1,41 @@
+---
+// One stub per published course at its canonical /SLOPxxxx/ path.
+//
+// The catalogue reserves these URLs and every course site emits its own as
+// `canonicalUrl`, so the cards point here; without a page at the other end the
+// whole register is links to a 404 on our own domain. Serving the course sites
+// themselves at these paths would need an origin mirror or a reverse proxy, so
+// until that exists the honest thing is to send the visitor on: a meta refresh
+// for the browser, and a plain link for anyone it doesn't fire for.
+//
+// Deliberately not a themed page. The theme's post-build a11y scan skips a
+// meta-refresh stub, because the markup has no landmarks or headings to check
+// and the author can't give it any.
+import catalogueData from "../data/catalogue.json";
+import type { CatalogueEntry } from "../lib/catalogue";
+
+export function getStaticPaths() {
+  return (catalogueData as CatalogueEntry[]).map((entry) => ({
+    params: { code: entry.feed.course.code },
+    props: {
+      title: entry.feed.course.title,
+      // The deployment the feed was read from, which is the course itself.
+      target: entry.apiUrl.replace(/api\/index\.json$/, ""),
+    },
+  }));
+}
+
+const { title, target } = Astro.props;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="refresh" content={`0; url=${target}`} />
+    <link rel="canonical" href={target} />
+    <title>{title}</title>
+  </head>
+  <body>
+    <p>Redirecting to <a href={target}>{title}</a>.</p>
+  </body>
+</html>
