@@ -37,10 +37,19 @@ const courses = catalogueData as CatalogueEntry[];
     <form class="filters" data-filters>
       <label class="wide">Search <input type="search" name="query" placeholder="Code, title or tag" aria-label="Search courses by code, title or tag" /></label>
       <label>Level <select name="level"><option value="">All levels</option>{[1,2,3,4,6,7,8].map((level) => <option value={level}>{level}000</option>)}</select></label>
-      <label class="check"><input type="checkbox" name="fave" /> My SlopU</label>
       <label class="check"><input type="checkbox" name="agent" /> Crit agents only</label>
       <button type="button" class="reset" data-reset hidden>Clear filters</button>
     </form>
+    <p class="banner" data-shared hidden></p>
+    <div class="program-bar">
+      <p class="program-count" data-program-count aria-live="polite" aria-atomic="true">
+        Nothing in your program yet — tap the heart on any course to start one.
+      </p>
+      <button type="button" class="only-mine" data-only-mine aria-pressed="false" hidden>
+        Show only these
+      </button>
+      <a class="builder-link" href="/program/">Open the program builder</a>
+    </div>
     <p class="count" aria-live="polite" data-count>{courses.length} courses</p>
     <div class="grid" data-grid>
       {courses.map(({ feed: { course, canonicalUrl }, agent }) => {
@@ -48,7 +57,7 @@ const courses = catalogueData as CatalogueEntry[];
         return (
         <article data-course data-search={`${course.code} ${course.title} ${course.tags.join(" ")}`.toLowerCase()} data-level={course.level} data-agent={agent ? "true" : "false"} data-code={course.code}>
           {card && <Image src={card} alt="" widths={[400, 800]} sizes="(max-width: 40rem) 100vw, 24rem" class="card-art" loading="lazy" />}
-          <button type="button" class="fave" data-fave={course.code} aria-pressed="false" aria-label={`Add ${course.title} to My SlopU`}>
+          <button type="button" class="fave" data-fave={course.code} aria-pressed="false" aria-label={`Add ${course.title} to your program`}>
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 21C12 21 3 14.6 3 8.9 3 5.6 5.6 3 8.7 3c1.9 0 2.7 1 3.3 2.2C12.6 4 13.4 3 15.3 3 18.4 3 21 5.6 21 8.9 21 14.6 12 21 12 21Z" /></svg>
           </button>
           <div class="body">
@@ -66,96 +75,141 @@ const courses = catalogueData as CatalogueEntry[];
 </BaseLayout>
 
 <script>
-  const STORE = "slopu:favourites";
+  import { decodeCodes, resolveAgainstCatalogue } from "../lib/program";
+  import { CODES_KEY, readCodes, writeCodes } from "../lib/storage";
 
-  // Per-viewer convenience, so a blocked or cleared store must degrade to "no
-  // favourites yet" rather than breaking the page. Every access is guarded:
-  // a private window throws on read as readily as on write.
-  const readFaves = (): Set<string> => {
-    try {
-      const raw = localStorage.getItem(STORE);
-      return new Set(raw ? (JSON.parse(raw) as string[]) : []);
-    } catch {
-      return new Set();
+  const setup = () => {
+    const root = document.querySelector<HTMLElement>(".catalogue");
+    if (!root) return;
+
+    const form = root.querySelector<HTMLFormElement>("[data-filters]");
+    const cards = [...root.querySelectorAll<HTMLElement>("[data-course]")];
+    const count = root.querySelector<HTMLElement>("[data-count]");
+    const none = root.querySelector<HTMLElement>("[data-none]");
+    const reset = root.querySelector<HTMLButtonElement>("[data-reset]");
+    const bar = root.querySelector<HTMLElement>("[data-program-count]");
+    const onlyMine = root.querySelector<HTMLButtonElement>("[data-only-mine]");
+    const sharedBanner = root.querySelector<HTMLElement>("[data-shared]");
+
+    // Re-read on every setup, never once at module scope: adopting a program
+    // on the builder and walking back here has to show the new hearts.
+    let faves = new Set(readCodes());
+
+    // A program arriving in the URL is previewed, never saved. The hearts stay
+    // the viewer's own; this only narrows what the grid shows.
+    let sharedCodes: Set<string> | null = null;
+    const raw = new URLSearchParams(location.search).get("p");
+    if (raw) {
+      const { known } = resolveAgainstCatalogue(
+        decodeCodes(raw),
+        cards.map((card) => card.dataset.code ?? ""),
+      );
+      if (known.length > 0) sharedCodes = new Set(known);
     }
-  };
-  const writeFaves = (faves: Set<string>) => {
-    try {
-      localStorage.setItem(STORE, JSON.stringify([...faves]));
-    } catch {
-      /* Nothing to do: the toggle still works for this page view. */
-    }
-  };
 
-  const form = document.querySelector<HTMLFormElement>("[data-filters]");
-  const cards = [...document.querySelectorAll<HTMLElement>("[data-course]")];
-  const count = document.querySelector<HTMLElement>("[data-count]");
-  const none = document.querySelector<HTMLElement>("[data-none]");
-  const reset = document.querySelector<HTMLButtonElement>("[data-reset]");
-  let faves = readFaves();
-
-  const paintFave = (button: HTMLButtonElement) => {
-    const code = button.dataset.fave ?? "";
-    const on = faves.has(code);
-    button.setAttribute("aria-pressed", String(on));
-    const title = button.closest("article")?.querySelector("h2")?.textContent?.trim() ?? code;
-    button.setAttribute("aria-label", `${on ? "Remove" : "Add"} ${title} ${on ? "from" : "to"} My SlopU`);
-  };
-
-  const apply = () => {
-    if (!form) return;
-    const data = new FormData(form);
-    const query = String(data.get("query") ?? "").trim().toLowerCase();
-    const level = String(data.get("level") ?? "");
-    const onlyFaves = data.get("fave") === "on";
-    const onlyAgents = data.get("agent") === "on";
-    let visible = 0;
-    for (const card of cards) {
-      const show =
-        (!query || card.dataset.search?.includes(query)) &&
-        (!level || card.dataset.level === level) &&
-        (!onlyFaves || faves.has(card.dataset.code ?? "")) &&
-        (!onlyAgents || card.dataset.agent === "true");
-      card.hidden = !show;
-      if (show) visible++;
-    }
-    if (count) count.textContent = `${visible} course${visible === 1 ? "" : "s"}`;
-    if (none) none.hidden = visible > 0 || cards.length === 0;
-    const filtering = Boolean(query || level || onlyFaves || onlyAgents);
-    if (reset) reset.hidden = !filtering;
-  };
-
-  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-fave]")) {
-    paintFave(button);
-    button.addEventListener("click", () => {
+    const paintFave = (button: HTMLButtonElement) => {
       const code = button.dataset.fave ?? "";
-      if (faves.has(code)) faves.delete(code);
-      else faves.add(code);
-      writeFaves(faves);
+      const on = faves.has(code);
+      button.setAttribute("aria-pressed", String(on));
+      const title = button.closest("article")?.querySelector("h2")?.textContent?.trim() ?? code;
+      button.setAttribute("aria-label", `${on ? "Remove" : "Add"} ${title} ${on ? "from" : "to"} your program`);
+    };
+
+    const paintBar = () => {
+      if (!bar || !onlyMine) return;
+      const n = faves.size;
+      bar.textContent =
+        n === 0
+          ? "Nothing in your program yet — tap the heart on any course to start one."
+          : `${n} course${n === 1 ? "" : "s"} in your program.`;
+      onlyMine.hidden = n === 0;
+      if (n === 0) onlyMine.setAttribute("aria-pressed", "false");
+    };
+
+    const apply = () => {
+      if (!form) return;
+      const data = new FormData(form);
+      const query = String(data.get("query") ?? "").trim().toLowerCase();
+      const level = String(data.get("level") ?? "");
+      const onlyFaves = onlyMine?.getAttribute("aria-pressed") === "true";
+      const onlyAgents = data.get("agent") === "on";
+      let visible = 0;
+      for (const card of cards) {
+        const code = card.dataset.code ?? "";
+        const show =
+          (!sharedCodes || sharedCodes.has(code)) &&
+          (!query || card.dataset.search?.includes(query)) &&
+          (!level || card.dataset.level === level) &&
+          (!onlyFaves || faves.has(code)) &&
+          (!onlyAgents || card.dataset.agent === "true");
+        card.hidden = !show;
+        if (show) visible++;
+      }
+      if (count) count.textContent = `${visible} course${visible === 1 ? "" : "s"}`;
+      if (none) none.hidden = visible > 0 || cards.length === 0;
+      const filtering = Boolean(query || level || onlyFaves || onlyAgents);
+      if (reset) reset.hidden = !filtering;
+    };
+
+    if (sharedBanner) {
+      sharedBanner.hidden = sharedCodes === null;
+      if (sharedCodes) {
+        sharedBanner.textContent = `Showing a shared program of ${sharedCodes.size} course${sharedCodes.size === 1 ? "" : "s"}. Open it in the program builder to save it as your own.`;
+      }
+    }
+
+    for (const button of root.querySelectorAll<HTMLButtonElement>("[data-fave]")) {
       paintFave(button);
-      // A card can filter itself out from under the pointer, which is the
-      // point of "My SlopU" --- unfavouriting inside it should remove the card.
-      apply();
-    });
-  }
+      // The direct call and astro:page-load both fire on first paint, so
+      // without this guard every heart would get two listeners from the start.
+      if (button.dataset.bound) continue;
+      button.dataset.bound = "true";
+      button.addEventListener("click", () => {
+        const code = button.dataset.fave ?? "";
+        if (faves.has(code)) faves.delete(code);
+        else faves.add(code);
+        writeCodes(faves);
+        paintFave(button);
+        paintBar();
+        // A card can filter itself out from under the pointer, which is the
+        // point of "show only these" — unhearting inside it should remove it.
+        apply();
+      });
+    }
 
-  form?.addEventListener("input", apply);
-  reset?.addEventListener("click", () => {
-    form?.reset();
+    if (!root.dataset.bound) {
+      root.dataset.bound = "true";
+      form?.addEventListener("input", apply);
+      reset?.addEventListener("click", () => {
+        form?.reset();
+        onlyMine?.setAttribute("aria-pressed", "false");
+        apply();
+      });
+      onlyMine?.addEventListener("click", () => {
+        const on = onlyMine.getAttribute("aria-pressed") === "true";
+        onlyMine.setAttribute("aria-pressed", String(!on));
+        apply();
+      });
+    }
+
+    paintBar();
     apply();
-  });
+  };
 
-  // Another tab's toggle is the same viewer's list.
+  // The theme mounts Astro's ClientRouter, so a module script runs once per
+  // document and never again across client-side navigations. Re-running setup
+  // on astro:page-load (which also fires on first load) is what keeps the
+  // hearts and filters alive on the way back from the builder.
+  setup();
+  document.addEventListener("astro:page-load", setup);
+
+  // Another tab's toggle is the same viewer's list. Registered at module
+  // scope, where it is bound once for the life of the document.
   window.addEventListener("storage", (event) => {
-    if (event.key !== STORE) return;
-    faves = readFaves();
-    for (const button of document.querySelectorAll<HTMLButtonElement>("[data-fave]")) paintFave(button);
-    apply();
+    if (event.key === CODES_KEY) setup();
   });
-
-  apply();
 </script>
 
 <style>
-  .catalogue{width:min(72rem,calc(100% - 2rem));margin-inline:auto;padding-block:clamp(2rem,4vw,3.5rem) clamp(3rem,8vw,7rem)}.code{font-weight:800;letter-spacing:.08em;text-transform:uppercase}.lede{font-size:clamp(1.15rem,2vw,1.5rem);max-width:42rem}.filters{display:grid;grid-template-columns:2fr 1fr auto auto auto;align-items:end;gap:1rem;margin:3rem 0 1rem;padding:1rem;background:var(--at-bg-alt);border:1px solid currentColor}.filters label{display:grid;gap:.35rem;font-weight:700}.filters label.check{grid-auto-flow:column;align-items:center;justify-content:start;gap:.45rem;white-space:nowrap}.filters input[type=search],.filters select{min-height:44px;padding:.65rem;border:1px solid currentColor;background:var(--at-bg-elevated);color:var(--at-text);font:inherit}.filters input[type=checkbox]{width:1.15rem;height:1.15rem;accent-color:var(--at-primary)}.reset{min-height:44px;padding:.65rem .9rem;border:1px solid currentColor;background:none;color:inherit;font:inherit;font-weight:700;cursor:pointer}.reset:hover{background:var(--at-bg-elevated)}.by-agent{margin-inline-start:.5rem;padding:.1rem .4rem;border:1px solid currentColor;border-radius:999px;font-size:.7rem;font-weight:650;letter-spacing:.04em;text-transform:none;vertical-align:middle}.count{font-variant-numeric:tabular-nums}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:1rem}.grid article{position:relative;display:flex;flex-direction:column;min-width:0;border:1px solid currentColor;overflow:hidden}.card-art{display:block;width:100%;min-width:0;aspect-ratio:1200/630;object-fit:cover;border-block-end:1px solid currentColor}.grid .body{padding:1.25rem}.fave{position:absolute;inset-block-start:.6rem;inset-inline-end:.6rem;display:grid;place-items:center;width:2.5rem;height:2.5rem;padding:0;border:1px solid currentColor;border-radius:999px;background:var(--at-bg);color:inherit;cursor:pointer}.fave svg{width:1.3rem;height:1.3rem;fill:none;stroke:currentColor;stroke-width:1.8}.fave[aria-pressed=true]{color:var(--at-primary)}.fave[aria-pressed=true] svg{fill:currentColor}.fave:hover{background:var(--at-bg-elevated)}.grid h2{margin-top:.25rem}.meta{font-weight:650}.grid ul{display:flex;flex-wrap:wrap;gap:.4rem;padding:0;list-style:none}.grid li{padding:.2rem .5rem;border:1px solid currentColor;border-radius:999px;font-size:.85rem}.empty{padding:3rem 0;font-size:1.2rem}@media(max-width:60rem){.filters{grid-template-columns:1fr 1fr}.filters .wide{grid-column:1/-1}.reset{grid-column:1/-1}}@media(max-width:40rem){.filters{grid-template-columns:1fr}}
+  .catalogue{width:min(72rem,calc(100% - 2rem));margin-inline:auto;padding-block:clamp(2rem,4vw,3.5rem) clamp(3rem,8vw,7rem)}.code{font-weight:800;letter-spacing:.08em;text-transform:uppercase}.lede{font-size:clamp(1.15rem,2vw,1.5rem);max-width:42rem}.filters{display:grid;grid-template-columns:2fr 1fr auto auto auto;align-items:end;gap:1rem;margin:3rem 0 1rem;padding:1rem;background:var(--at-bg-alt);border:1px solid currentColor}.filters label{display:grid;gap:.35rem;font-weight:700}.filters label.check{grid-auto-flow:column;align-items:center;justify-content:start;gap:.45rem;white-space:nowrap}.filters input[type=search],.filters select{min-height:44px;padding:.65rem;border:1px solid currentColor;background:var(--at-bg-elevated);color:var(--at-text);font:inherit}.filters input[type=checkbox]{width:1.15rem;height:1.15rem;accent-color:var(--at-primary)}.reset{min-height:44px;padding:.65rem .9rem;border:1px solid currentColor;background:none;color:inherit;font:inherit;font-weight:700;cursor:pointer}.reset:hover{background:var(--at-bg-elevated)}.by-agent{margin-inline-start:.5rem;padding:.1rem .4rem;border:1px solid currentColor;border-radius:999px;font-size:.7rem;font-weight:650;letter-spacing:.04em;text-transform:none;vertical-align:middle}.count{font-variant-numeric:tabular-nums}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:1rem}.grid article{position:relative;display:flex;flex-direction:column;min-width:0;border:1px solid currentColor;overflow:hidden}.card-art{display:block;width:100%;min-width:0;aspect-ratio:1200/630;object-fit:cover;border-block-end:1px solid currentColor}.grid .body{padding:1.25rem}.fave{position:absolute;inset-block-start:.6rem;inset-inline-end:.6rem;display:grid;place-items:center;width:2.5rem;height:2.5rem;padding:0;border:1px solid currentColor;border-radius:999px;background:var(--at-bg);color:inherit;cursor:pointer}.fave svg{width:1.3rem;height:1.3rem;fill:none;stroke:currentColor;stroke-width:1.8}.fave[aria-pressed=true]{color:var(--at-primary)}.fave[aria-pressed=true] svg{fill:currentColor}.fave:hover{background:var(--at-bg-elevated)}.grid h2{margin-top:.25rem}.meta{font-weight:650}.grid ul{display:flex;flex-wrap:wrap;gap:.4rem;padding:0;list-style:none}.grid li{padding:.2rem .5rem;border:1px solid currentColor;border-radius:999px;font-size:.85rem}.empty{padding:3rem 0;font-size:1.2rem}.banner{margin-block:1.5rem 0;padding:1rem;border:1px solid currentcolor;background:var(--at-warning-soft);font-weight:650}.program-bar{display:flex;flex-wrap:wrap;gap:.75rem 1rem;align-items:center;margin-block:1rem;padding:1rem;border:1px solid currentcolor;background:var(--at-bg-alt)}.program-count{flex:1 1 16rem;margin:0;font-weight:700}.only-mine{min-height:44px;padding:.65rem .9rem;border:1px solid currentcolor;background:none;color:inherit;font:inherit;font-weight:700;cursor:pointer}.only-mine:hover{background:var(--at-bg-elevated)}.only-mine[aria-pressed=true]{background:var(--at-primary);color:var(--at-on-primary)}.only-mine[aria-pressed=true]:hover{background:var(--at-primary-hover)}.builder-link{font-weight:700}@media(max-width:60rem){.filters{grid-template-columns:1fr 1fr}.filters .wide{grid-column:1/-1}.reset{grid-column:1/-1}}@media(max-width:40rem){.filters{grid-template-columns:1fr}}
 </style>

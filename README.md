@@ -27,6 +27,26 @@ Feeds carry a `schemaVersion`. The shape is emitted by
 contract actually lives; a field added there must be declared here or the
 strict parse will reject every feed at once.
 
+## The program builder
+
+`/program/` assembles the courses a visitor has hearted into a program, checks
+it against the award rules, and hands back a shareable link.
+
+The rules live in `src/lib/program.ts` as data, so changing what constitutes a
+program is one edit there: an undergraduate program is two courses at each of
+levels 1-4, a masters two at each of 6 and 8. Level 7 is legal in the feed
+schema but has no courses, and counts toward neither.
+
+A selection travels in the URL as `?p=1007.1039.1101` --- the codes with the
+redundant `SLOP` dropped --- alongside an optional `?n=` naming the program.
+Both pages read an incoming `?p=`: the builder offers to save it, the register
+previews it. Neither writes to `localStorage` until the visitor asks, so
+opening someone else's link never overwrites your own program.
+
+The name is attacker-controlled display text. `sanitiseName` strips control,
+bidi and zero-width characters and caps the length, and the pages only ever
+render it through `textContent`, an input `value` or `URLSearchParams`.
+
 ## Canonical URLs
 
 `https://courses.slop.university/SLOPxxxx/` is reserved as each course's

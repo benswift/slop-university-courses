@@ -1,0 +1,480 @@
+---
+import BaseLayout from "astro-theme-university/layouts/BaseLayout.astro";
+import catalogueData from "../data/catalogue.json";
+import type { CatalogueEntry } from "../lib/catalogue";
+import { AWARDS } from "../lib/program";
+import { siteConfig } from "../site-config";
+
+const courses = catalogueData as CatalogueEntry[];
+
+// Code -> [title, level]. The canonical URL is derivable from the code, so it
+// is not carried: every course links to its own /SLOPxxxx/ stub. ~6.5 KB for
+// the whole register, which is cheaper than fetching it per page view.
+const courseIndex = Object.fromEntries(
+  courses.map(({ feed: { course } }) => [course.code, [course.title, course.level]]),
+);
+
+// Titles come from student-authored feeds, so a title containing "</script>"
+// would otherwise close this tag early. Escaping "<" is the standard fix and
+// keeps the payload valid JSON.
+const courseIndexJson = JSON.stringify(courseIndex).replaceAll("<", "\\u003c");
+
+const levelLabel = (level: number) => `${level}000-level`;
+---
+
+<BaseLayout
+  title="Program builder"
+  description="Assemble a program from the Slop University register, see whether it adds up, and share it."
+  {...siteConfig}
+>
+  <div class="builder">
+    <h1>Program builder</h1>
+    <p class="lede">
+      Heart courses in the register and they collect here. Name the result whatever you like — the
+      University does not check.
+    </p>
+
+    <p class="banner" data-banner hidden></p>
+
+    <section aria-labelledby="your-program">
+      <h2 id="your-program">Your program</h2>
+
+      <label class="name-field">
+        What is it called?
+        <input
+          type="text"
+          data-name
+          maxlength="80"
+          placeholder="Bachelor of Applied Puddles"
+          autocomplete="off"
+        />
+      </label>
+
+      <p class="count" data-count aria-live="polite" aria-atomic="true">
+        Nothing in your program yet.
+      </p>
+      <p class="empty" data-empty>
+        <a href="/">Browse the register</a> and tap the heart on any course to add it.
+      </p>
+
+      <div data-groups></div>
+    </section>
+
+    <section aria-labelledby="does-it-add-up">
+      <h2 id="does-it-add-up">Does it add up?</h2>
+      <div class="awards">
+        {
+          AWARDS.map((award) => (
+            <article class="award" data-award={award.id}>
+              <h3>{award.name.replace(/^./, (c) => c.toUpperCase())}</h3>
+              <p class="standing" data-standing>
+                Not yet — {award.requirements.reduce((n, r) => n + r.count, 0)} courses to go.
+              </p>
+              <ul class="requirements">
+                {award.requirements.map((requirement) => (
+                  <li data-requirement={requirement.level}>
+                    <span class="req-level">{levelLabel(requirement.level)}</span>
+                    <span class="req-count" data-req-count>
+                      0 of {requirement.count}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))
+        }
+      </div>
+    </section>
+
+    <section aria-labelledby="share">
+      <h2 id="share">Share it</h2>
+      <p>
+        The link carries the whole program, so anyone who opens it sees exactly what you assembled.
+      </p>
+      <div class="share-row">
+        <label class="share-link">
+          Link to this program
+          <input type="text" data-share-url readonly value="" />
+        </label>
+      </div>
+      <div class="share-actions">
+        <button type="button" data-copy-link>Copy link</button>
+        <button type="button" data-copy-social>Copy for sharing</button>
+        <button type="button" data-save hidden>Save as mine</button>
+        <button type="button" data-clear hidden>Clear my program</button>
+      </div>
+      <p class="share-status" data-share-status role="status" aria-live="polite" aria-atomic="true">
+      </p>
+    </section>
+  </div>
+
+  {/* Data, not code: is:inline keeps Astro from trying to bundle it. */}
+  <script is:inline type="application/json" data-course-index set:html={courseIndexJson} />
+</BaseLayout>
+
+<script>
+  import {
+    AWARDS,
+    assess,
+    bestAward,
+    buildShareUrl,
+    decodeCodes,
+    type Level,
+    levelOf,
+    resolveAgainstCatalogue,
+    sameSelection,
+    sanitiseName,
+    shareText,
+  } from "../lib/program";
+  import { CODES_KEY, readCodes, readName, writeCodes, writeName } from "../lib/storage";
+
+  type CourseIndex = Record<string, [string, number]>;
+
+  // A selection the viewer arrived with in the URL, rather than one they own.
+  // It is never written to storage until they ask for it to be.
+  let shared: { codes: string[]; name: string; missing: number } | null = null;
+
+  const setup = () => {
+    const root = document.querySelector<HTMLElement>(".builder");
+    if (!root) return;
+
+    const indexEl = document.querySelector<HTMLScriptElement>("[data-course-index]");
+    const index = (indexEl ? JSON.parse(indexEl.textContent ?? "{}") : {}) as CourseIndex;
+
+    const nameInput = root.querySelector<HTMLInputElement>("[data-name]")!;
+    const banner = root.querySelector<HTMLElement>("[data-banner]")!;
+    const count = root.querySelector<HTMLElement>("[data-count]")!;
+    const empty = root.querySelector<HTMLElement>("[data-empty]")!;
+    const groups = root.querySelector<HTMLElement>("[data-groups]")!;
+    const shareUrl = root.querySelector<HTMLInputElement>("[data-share-url]")!;
+    const shareStatus = root.querySelector<HTMLElement>("[data-share-status]")!;
+    const saveButton = root.querySelector<HTMLButtonElement>("[data-save]")!;
+    const clearButton = root.querySelector<HTMLButtonElement>("[data-clear]")!;
+
+    // Read the URL once per arrival. After that the page is driven by state,
+    // and the address bar is left alone — the share link is minted fresh from
+    // the current selection whenever it is copied.
+    if (shared === null) {
+      const params = new URLSearchParams(location.search);
+      const raw = params.get("p");
+      if (raw !== null) {
+        const { known, unknown } = resolveAgainstCatalogue(decodeCodes(raw), Object.keys(index));
+        if (!sameSelection(known, readCodes())) {
+          shared = { codes: known, name: sanitiseName(params.get("n")), missing: unknown.length };
+        }
+      }
+    }
+
+    const selection = () => shared?.codes ?? readCodes();
+
+    const say = (message: string) => {
+      shareStatus.textContent = message;
+    };
+
+    const render = () => {
+      const codes = selection().filter((code) => code in index);
+      const levels = codes.map((code) => levelOf(code) as Level);
+      const isShared = shared !== null;
+
+      // Shared programs are read-only until adopted, so the name field cannot
+      // be edited into a state that has nowhere to be saved.
+      nameInput.readOnly = isShared;
+      nameInput.value = isShared ? shared!.name : readName();
+
+      banner.hidden = !isShared;
+      if (isShared) {
+        const retired = shared!.missing;
+        banner.textContent =
+          `You are looking at a shared program, not your own. Saving it replaces whatever you had.` +
+          (retired > 0
+            ? ` ${retired} course${retired === 1 ? "" : "s"} in the link ${retired === 1 ? "is" : "are"} no longer in the register.`
+            : "");
+      }
+
+      saveButton.hidden = !isShared;
+      clearButton.hidden = isShared || codes.length === 0;
+
+      count.textContent =
+        codes.length === 0
+          ? isShared
+            ? "This shared program has no courses in it."
+            : "Nothing in your program yet."
+          : `${codes.length} course${codes.length === 1 ? "" : "s"}.`;
+      empty.hidden = codes.length > 0 || isShared;
+
+      // Grouped by level, because that is the unit the award rules count in.
+      groups.replaceChildren();
+      const byLevel = new Map<number, string[]>();
+      for (const code of codes) {
+        const level = levelOf(code);
+        byLevel.set(level, [...(byLevel.get(level) ?? []), code]);
+      }
+      for (const level of [...byLevel.keys()].toSorted((a, b) => a - b)) {
+        const section = document.createElement("section");
+        section.className = "level-group";
+
+        const heading = document.createElement("h3");
+        heading.textContent = `${level}000-level`;
+        section.append(heading);
+
+        const list = document.createElement("ul");
+        for (const code of byLevel.get(level)!) {
+          const [title] = index[code];
+          const item = document.createElement("li");
+
+          const link = document.createElement("a");
+          link.href = `/${code}/`;
+          link.textContent = `${code} ${title}`;
+          item.append(link);
+
+          if (!isShared) {
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.className = "remove";
+            remove.textContent = "Remove";
+            // The visible word is the same on every row, so the accessible
+            // name has to carry which row it is.
+            remove.setAttribute("aria-label", `Remove ${code} ${title} from your program`);
+            remove.addEventListener("click", () => {
+              writeCodes(readCodes().filter((c) => c !== code));
+              render();
+            });
+            item.append(remove);
+          }
+          list.append(item);
+        }
+        section.append(list);
+        groups.append(section);
+      }
+
+      for (const award of AWARDS) {
+        const card = root.querySelector<HTMLElement>(`[data-award="${award.id}"]`)!;
+        const progress = assess(award, levels);
+        const standing = card.querySelector<HTMLElement>("[data-standing]")!;
+        standing.textContent = progress.complete
+          ? "Complete. Name it whatever you like."
+          : `Not yet — ${progress.outstanding} course${progress.outstanding === 1 ? "" : "s"} to go.`;
+        card.dataset.complete = String(progress.complete);
+        for (const line of progress.lines) {
+          const row = card.querySelector<HTMLElement>(`[data-requirement="${line.level}"]`)!;
+          row.querySelector<HTMLElement>("[data-req-count]")!.textContent =
+            `${line.have} of ${line.need}`;
+          row.dataset.met = String(line.met);
+        }
+      }
+
+      shareUrl.value = buildShareUrl(location.origin, codes, nameInput.value);
+    };
+
+    const copy = async (text: string, done: string) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        say(done);
+      } catch {
+        // Clipboard access is refused in plenty of ordinary situations, so
+        // fall back to selecting the link for a manual copy rather than
+        // pretending it worked.
+        shareUrl.select();
+        say("Copying was blocked — the link is selected, so copy it by hand.");
+      }
+    };
+
+    if (!root.dataset.bound) {
+      root.dataset.bound = "true";
+
+      nameInput.addEventListener("input", () => {
+        if (shared) return;
+        writeName(nameInput.value);
+        shareUrl.value = buildShareUrl(location.origin, selection(), nameInput.value);
+      });
+
+      root.querySelector("[data-copy-link]")!.addEventListener("click", () => {
+        void copy(shareUrl.value, "Link copied.");
+      });
+
+      root.querySelector("[data-copy-social]")!.addEventListener("click", () => {
+        const codes = selection().filter((code) => code in index);
+        const levels = codes.map((code) => levelOf(code) as Level);
+        const best = bestAward(levels);
+        void copy(
+          shareText({
+            name: nameInput.value,
+            courses: codes.map((code) => ({ code, title: index[code][0] })),
+            awardName: best.complete ? best.award.name : undefined,
+            url: buildShareUrl(location.origin, codes, nameInput.value),
+          }),
+          "Post copied.",
+        );
+      });
+
+      saveButton.addEventListener("click", () => {
+        if (!shared) return;
+        // Replace rather than merge: the viewer asked for this program, and a
+        // merge would produce one that satisfies neither.
+        writeCodes(shared.codes);
+        writeName(shared.name);
+        shared = null;
+        // The equality rule now treats the URL as the viewer's own, so the
+        // banner clears without a second code path.
+        render();
+        say("Saved. It is your program now.");
+      });
+
+      clearButton.addEventListener("click", () => {
+        writeCodes([]);
+        writeName("");
+        render();
+        say("Cleared.");
+      });
+    }
+
+    render();
+  };
+
+  // The theme mounts Astro's ClientRouter, so a module script runs once per
+  // document and never again across client-side navigations. Binding on
+  // astro:page-load (which also fires on first load) is what keeps the page
+  // alive on the way back from the register; the guard above stops the first
+  // paint binding twice.
+  setup();
+  document.addEventListener("astro:page-load", () => {
+    shared = null;
+    setup();
+  });
+
+  // Another tab editing the same program is the same viewer.
+  window.addEventListener("storage", (event) => {
+    if (event.key === CODES_KEY) setup();
+  });
+</script>
+
+<style>
+  .builder {
+    width: min(60rem, calc(100% - 2rem));
+    margin-inline: auto;
+    padding-block: clamp(2rem, 4vw, 3.5rem) clamp(3rem, 8vw, 7rem);
+  }
+  .lede {
+    font-size: clamp(1.1rem, 2vw, 1.35rem);
+    max-width: 42rem;
+  }
+  .builder section {
+    margin-block-start: 3rem;
+  }
+  .banner {
+    margin-block: 1.5rem 0;
+    padding: 1rem;
+    border: 1px solid currentcolor;
+    background: var(--at-warning-soft);
+    font-weight: 650;
+  }
+  .name-field,
+  .share-link {
+    display: grid;
+    gap: 0.35rem;
+    max-width: 34rem;
+    font-weight: 700;
+  }
+  .name-field input,
+  .share-link input {
+    min-height: 44px;
+    padding: 0.65rem;
+    border: 1px solid currentcolor;
+    background: var(--at-bg-elevated);
+    color: var(--at-text);
+    font: inherit;
+  }
+  .share-link input {
+    font-family: var(--at-font-mono);
+    font-size: var(--at-font-size-sm);
+  }
+  .count {
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+  }
+  .level-group h3 {
+    padding-block-end: 0.35rem;
+    border-block-end: 1px solid currentcolor;
+  }
+  .level-group ul {
+    padding: 0;
+    list-style: none;
+  }
+  .level-group li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-block: 0.6rem;
+    border-block-end: 1px solid var(--at-divider);
+  }
+  .awards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+    gap: 1rem;
+  }
+  .award {
+    padding: 1.25rem;
+    border: 1px solid currentcolor;
+  }
+  .award h3 {
+    margin-block-start: 0;
+  }
+  .award[data-complete="true"] {
+    background: var(--at-success-soft);
+  }
+  .standing {
+    font-weight: 700;
+  }
+  .requirements {
+    padding: 0;
+    list-style: none;
+  }
+  .requirements li {
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    padding-block: 0.4rem;
+    border-block-end: 1px solid var(--at-divider);
+  }
+  .req-count {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+  }
+  .requirements li[data-met="true"] .req-count {
+    color: var(--at-success);
+  }
+  .share-row {
+    margin-block: 1rem;
+  }
+  .share-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .share-actions button,
+  .remove {
+    min-height: 44px;
+    padding: 0.65rem 0.9rem;
+    border: 1px solid currentcolor;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .remove {
+    min-height: 2rem;
+    padding: 0.25rem 0.6rem;
+    font-size: var(--at-font-size-sm);
+  }
+  .share-actions button:hover,
+  .remove:hover {
+    background: var(--at-bg-elevated);
+  }
+  .share-status {
+    min-height: 1.5rem;
+    font-weight: 650;
+  }
+</style>

@@ -6,7 +6,10 @@ export const siteConfig = defineSiteConfig({
   name: "Slop University",
   // the theme renders the logo as this site's home link, so the nav carries
   // the cross-link up to the university rather than repeating it
-  links: [{ text: "University home", href: "https://slop.university/" }],
+  links: [
+    { text: "Program builder", href: "/program/" },
+    { text: "University home", href: "https://slop.university/" },
+  ],
   // overrides the brand layer's pair, whose "Programs and courses" entry
   // would be a self-link here
   legalLinks: [{ text: "Slop University", href: "https://slop.university/" }],
