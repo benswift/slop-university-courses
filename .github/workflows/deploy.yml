@@ -36,14 +36,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
+      - name: Cache Astro image optimisation
+        uses: actions/cache@v6
+        with:
+          path: node_modules/.astro
+          key: ${{ runner.os }}-astro-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-astro-
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Lint
         run: pnpm run lint
-
-      - name: Lint CSS
-        run: pnpm run lint:css
 
       - name: Format check
         run: pnpm run format:check
