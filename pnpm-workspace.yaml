@@ -4,3 +4,9 @@
 allowBuilds:
   esbuild: true
   sharp: false
+
+# minimatch <11.0.1 has a globparts amplification DoS (GHSA-g3hv-75wg-m249).
+# eslint 10.14 and @eslint/config-array 0.23 (via @e18e/eslint-plugin and
+# eslint-plugin-unused-imports) pin ^10; drop once they allow >=11.0.1.
+overrides:
+  minimatch: ^11.0.1
