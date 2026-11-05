@@ -5,6 +5,12 @@ allowBuilds:
   esbuild: true
   sharp: false
 
+# Name patterns, not name@version: the supply-chain verify gate matches by
+# package-name glob. Lets us adopt newly published Astro releases on day one.
+minimumReleaseAgeExclude:
+  - astro
+  - "@astrojs/*"
+
 # minimatch <11.0.1 has a globparts amplification DoS (GHSA-g3hv-75wg-m249).
 # eslint 10.14 and @eslint/config-array 0.23 (via @e18e/eslint-plugin and
 # eslint-plugin-unused-imports) pin ^10; drop once they allow >=11.0.1.

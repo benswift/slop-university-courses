@@ -20,7 +20,7 @@
   "dependencies": {
     "@astrojs/sitemap": "^3.7.4",
     "@iconify-json/iconoir": "^1.2.12",
-    "astro": "^7.4.2",
+    "astro": "^7.4.5",
     "astro-theme-slop": "github:benswift/astro-theme-slop#v0.3.0",
     "astro-theme-university": "git+https://github.com/ANUcybernetics/astro-theme-university.git#v0.25.0",
     "sharp": "^0.35.5",
@@ -39,7 +39,7 @@
     "stylelint-config-standard": "^40.0.0",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   },
   "engines": {
     "node": ">=24",
