@@ -63,26 +63,18 @@ const levelLabel = (level: number) => `${level}000-level`;
     <section aria-labelledby="does-it-add-up">
       <h2 id="does-it-add-up">Does it add up?</h2>
       <div class="awards">
-        {
-          AWARDS.map((award) => (
-            <article class="award" data-award={award.id}>
-              <h3>{award.name.replace(/^./, (c) => c.toUpperCase())}</h3>
-              <p class="standing" data-standing>
-                Not yet — {award.requirements.reduce((n, r) => n + r.count, 0)} courses to go.
-              </p>
-              <ul class="requirements">
-                {award.requirements.map((requirement) => (
-                  <li data-requirement={requirement.level}>
-                    <span class="req-level">{levelLabel(requirement.level)}</span>
-                    <span class="req-count" data-req-count>
-                      0 of {requirement.count}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </article>
-          ))
-        }
+        {AWARDS.map((award) => <article class="award" data-award={award.id}>
+          <h3>{award.name.replace(/^./, (c) => c.toUpperCase())}</h3>
+          <p class="standing" data-standing>
+            Not yet — {award.requirements.reduce((n, r) => n + r.count, 0)} courses to go.
+          </p>
+          <ul class="requirements">
+            {award.requirements.map((requirement) => <li data-requirement={requirement.level}>
+              <span class="req-level">{levelLabel(requirement.level)}</span>
+              <span class="req-count" data-req-count> 0 of {requirement.count} </span>
+            </li>)}
+          </ul>
+        </article>)}
       </div>
     </section>
 
@@ -103,14 +95,23 @@ const levelLabel = (level: number) => `${level}000-level`;
         <button type="button" data-save hidden>Save as mine</button>
         <button type="button" data-clear hidden>Clear my program</button>
       </div>
-      <p class="share-status" data-share-status role="status" aria-live="polite" aria-atomic="true">
-      </p>
+      <p
+        class="share-status"
+        data-share-status
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      ></p>
     </section>
   </div>
 
   {/* Data, not code: is:inline keeps Astro from trying to bundle it. */}
-  <script is:inline type="application/json" data-course-index set:html={courseIndexJson} />
-</BaseLayout>
+  <script
+    is:inline
+    type="application/json"
+    data-course-index
+    set:html={courseIndexJson}
+  /></BaseLayout>
 
 <script>
   import {

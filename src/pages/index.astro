@@ -35,8 +35,21 @@ const courses = catalogueData as CatalogueEntry[];
       <p class="lede">A complete register of courses somebody went to the trouble of inventing.</p>
     </header>
     <form class="filters" data-filters>
-      <label class="wide">Search <input type="search" name="query" placeholder="Code, title or tag" aria-label="Search courses by code, title or tag" /></label>
-      <label>Level <select name="level"><option value="">All levels</option>{[1,2,3,4,6,7,8].map((level) => <option value={level}>{level}000</option>)}</select></label>
+      <label class="wide"
+        >Search
+        <input
+          type="search"
+          name="query"
+          placeholder="Code, title or tag"
+          aria-label="Search courses by code, title or tag"
+      /></label>
+      <label
+        >Level
+        <select name="level">
+          <option value="">All levels</option>
+          {[1, 2, 3, 4, 6, 7, 8].map((level) => <option value={level}>{level}000</option>)}
+        </select></label
+      >
       <label class="check"><input type="checkbox" name="agent" /> Crit agents only</label>
       <button type="button" class="reset" data-reset hidden>Clear filters</button>
     </form>
@@ -54,22 +67,51 @@ const courses = catalogueData as CatalogueEntry[];
     <div class="grid" data-grid>
       {courses.map(({ feed: { course, canonicalUrl }, agent }) => {
         const card = cardFor(course.code);
-        return (
-        <article data-course data-search={`${course.code} ${course.title} ${course.tags.join(" ")}`.toLowerCase()} data-level={course.level} data-agent={agent ? "true" : "false"} data-code={course.code}>
-          {card && <Image src={card} alt="" widths={[400, 800]} sizes="(max-width: 40rem) 100vw, 24rem" class="card-art" loading="lazy" />}
-          <button type="button" class="fave" data-fave={course.code} aria-pressed="false" aria-label={`Add ${course.title} to your program`}>
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 21C12 21 3 14.6 3 8.9 3 5.6 5.6 3 8.7 3c1.9 0 2.7 1 3.3 2.2C12.6 4 13.4 3 15.3 3 18.4 3 21 5.6 21 8.9 21 14.6 12 21 12 21Z" /></svg>
+        return <article
+          data-course
+          data-search={`${course.code} ${course.title} ${course.tags.join(" ")}`.toLowerCase()}
+          data-level={course.level}
+          data-agent={agent ? "true" : "false"}
+          data-code={course.code}
+        >
+          {card && (
+            <Image
+              src={card}
+              alt=""
+              widths={[400, 800]}
+              sizes="(max-width: 40rem) 100vw, 24rem"
+              class="card-art"
+              loading="lazy"
+            />
+          )}
+          <button
+            type="button"
+            class="fave"
+            data-fave={course.code}
+            aria-pressed="false"
+            aria-label={`Add ${course.title} to your program`}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                d="M12 21C12 21 3 14.6 3 8.9 3 5.6 5.6 3 8.7 3c1.9 0 2.7 1 3.3 2.2C12.6 4 13.4 3 15.3 3 18.4 3 21 5.6 21 8.9 21 14.6 12 21 12 21Z"
+              />
+            </svg>
           </button>
           <div class="body">
-            <p class="code">{course.code}{agent && <span class="by-agent">agent-authored</span>}</p><h2><a href={canonicalUrl}>{course.title}</a></h2>
-            <p>{course.description}</p><p class="meta">Level {course.level} · {course.session} {course.year}</p>
-            <ul>{course.tags.map((tag) => <li>{tag}</li>)}</ul>
+            <p class="code">{course.code}{agent && <span class="by-agent">agent-authored</span>}</p>
+            <h2><a href={canonicalUrl}>{course.title}</a></h2>
+            <p>{course.description}</p>
+            <p class="meta">Level {course.level} · {course.session} {course.year}</p>
+            <ul>
+              {course.tags.map((tag) => <li>{tag}</li>)}
+            </ul>
           </div>
-        </article>
-        );
+        </article>;
       })}
     </div>
-    {courses.length === 0 && <p class="empty">The register opens after the first course publication round.</p>}
+    {courses.length === 0 && <p class="empty">
+      The register opens after the first course publication round.
+    </p>}
     <p class="empty" data-none hidden>Nothing matches those filters.</p>
   </div>
 </BaseLayout>
@@ -112,7 +154,10 @@ const courses = catalogueData as CatalogueEntry[];
       const on = faves.has(code);
       button.setAttribute("aria-pressed", String(on));
       const title = button.closest("article")?.querySelector("h2")?.textContent?.trim() ?? code;
-      button.setAttribute("aria-label", `${on ? "Remove" : "Add"} ${title} ${on ? "from" : "to"} your program`);
+      button.setAttribute(
+        "aria-label",
+        `${on ? "Remove" : "Add"} ${title} ${on ? "from" : "to"} your program`,
+      );
     };
 
     const paintBar = () => {
@@ -129,7 +174,9 @@ const courses = catalogueData as CatalogueEntry[];
     const apply = () => {
       if (!form) return;
       const data = new FormData(form);
-      const query = String(data.get("query") ?? "").trim().toLowerCase();
+      const query = String(data.get("query") ?? "")
+        .trim()
+        .toLowerCase();
       const level = String(data.get("level") ?? "");
       const onlyFaves = onlyMine?.getAttribute("aria-pressed") === "true";
       const onlyAgents = data.get("agent") === "on";
@@ -211,5 +258,220 @@ const courses = catalogueData as CatalogueEntry[];
 </script>
 
 <style>
-  .catalogue{width:min(72rem,calc(100% - 2rem));margin-inline:auto;padding-block:clamp(2rem,4vw,3.5rem) clamp(3rem,8vw,7rem)}.code{font-weight:800;letter-spacing:.08em;text-transform:uppercase}.lede{font-size:clamp(1.15rem,2vw,1.5rem);max-width:42rem}.filters{display:grid;grid-template-columns:2fr 1fr auto auto auto;align-items:end;gap:1rem;margin:3rem 0 1rem;padding:1rem;background:var(--at-bg-alt);border:1px solid currentColor}.filters label{display:grid;gap:.35rem;font-weight:700}.filters label.check{grid-auto-flow:column;align-items:center;justify-content:start;gap:.45rem;white-space:nowrap}.filters input[type=search],.filters select{min-height:44px;padding:.65rem;border:1px solid currentColor;background:var(--at-bg-elevated);color:var(--at-text);font:inherit}.filters input[type=checkbox]{width:1.15rem;height:1.15rem;accent-color:var(--at-primary)}.reset{min-height:44px;padding:.65rem .9rem;border:1px solid currentColor;background:none;color:inherit;font:inherit;font-weight:700;cursor:pointer}.reset:hover{background:var(--at-bg-elevated)}.by-agent{margin-inline-start:.5rem;padding:.1rem .4rem;border:1px solid currentColor;border-radius:999px;font-size:.7rem;font-weight:650;letter-spacing:.04em;text-transform:none;vertical-align:middle}.count{font-variant-numeric:tabular-nums}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:1rem}.grid article{position:relative;display:flex;flex-direction:column;min-width:0;border:1px solid currentColor;overflow:hidden}.card-art{display:block;width:100%;min-width:0;aspect-ratio:1200/630;object-fit:cover;border-block-end:1px solid currentColor}.grid .body{padding:1.25rem}.fave{position:absolute;inset-block-start:.6rem;inset-inline-end:.6rem;display:grid;place-items:center;width:2.5rem;height:2.5rem;padding:0;border:1px solid currentColor;border-radius:999px;background:var(--at-bg);color:inherit;cursor:pointer}.fave svg{width:1.3rem;height:1.3rem;fill:none;stroke:currentColor;stroke-width:1.8}.fave[aria-pressed=true]{color:var(--at-primary)}.fave[aria-pressed=true] svg{fill:currentColor}.fave:hover{background:var(--at-bg-elevated)}.grid h2{margin-top:.25rem}.meta{font-weight:650}.grid ul{display:flex;flex-wrap:wrap;gap:.4rem;padding:0;list-style:none}.grid li{padding:.2rem .5rem;border:1px solid currentColor;border-radius:999px;font-size:.85rem}.empty{padding:3rem 0;font-size:1.2rem}.banner{margin-block:1.5rem 0;padding:1rem;border:1px solid currentcolor;background:var(--at-warning-soft);font-weight:650}.program-bar{display:flex;flex-wrap:wrap;gap:.75rem 1rem;align-items:center;margin-block:1rem;padding:1rem;border:1px solid currentcolor;background:var(--at-bg-alt)}.program-count{flex:1 1 16rem;margin:0;font-weight:700}.only-mine{min-height:44px;padding:.65rem .9rem;border:1px solid currentcolor;background:none;color:inherit;font:inherit;font-weight:700;cursor:pointer}.only-mine:hover{background:var(--at-bg-elevated)}.only-mine[aria-pressed=true]{background:var(--at-primary);color:var(--at-on-primary)}.only-mine[aria-pressed=true]:hover{background:var(--at-primary-hover)}.builder-link{font-weight:700}@media(max-width:60rem){.filters{grid-template-columns:1fr 1fr}.filters .wide{grid-column:1/-1}.reset{grid-column:1/-1}}@media(max-width:40rem){.filters{grid-template-columns:1fr}}
+  .catalogue {
+    width: min(72rem, calc(100% - 2rem));
+    margin-inline: auto;
+    padding-block: clamp(2rem, 4vw, 3.5rem) clamp(3rem, 8vw, 7rem);
+  }
+  .code {
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .lede {
+    font-size: clamp(1.15rem, 2vw, 1.5rem);
+    max-width: 42rem;
+  }
+  .filters {
+    display: grid;
+    grid-template-columns: 2fr 1fr auto auto auto;
+    align-items: end;
+    gap: 1rem;
+    margin: 3rem 0 1rem;
+    padding: 1rem;
+    background: var(--at-bg-alt);
+    border: 1px solid currentColor;
+  }
+  .filters label {
+    display: grid;
+    gap: 0.35rem;
+    font-weight: 700;
+  }
+  .filters label.check {
+    grid-auto-flow: column;
+    align-items: center;
+    justify-content: start;
+    gap: 0.45rem;
+    white-space: nowrap;
+  }
+  .filters input[type="search"],
+  .filters select {
+    min-height: 44px;
+    padding: 0.65rem;
+    border: 1px solid currentColor;
+    background: var(--at-bg-elevated);
+    color: var(--at-text);
+    font: inherit;
+  }
+  .filters input[type="checkbox"] {
+    width: 1.15rem;
+    height: 1.15rem;
+    accent-color: var(--at-primary);
+  }
+  .reset {
+    min-height: 44px;
+    padding: 0.65rem 0.9rem;
+    border: 1px solid currentColor;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .reset:hover {
+    background: var(--at-bg-elevated);
+  }
+  .by-agent {
+    margin-inline-start: 0.5rem;
+    padding: 0.1rem 0.4rem;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    vertical-align: middle;
+  }
+  .count {
+    font-variant-numeric: tabular-nums;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+    gap: 1rem;
+  }
+  .grid article {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border: 1px solid currentColor;
+    overflow: hidden;
+  }
+  .card-art {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    aspect-ratio: 1200/630;
+    object-fit: cover;
+    border-block-end: 1px solid currentColor;
+  }
+  .grid .body {
+    padding: 1.25rem;
+  }
+  .fave {
+    position: absolute;
+    inset-block-start: 0.6rem;
+    inset-inline-end: 0.6rem;
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    background: var(--at-bg);
+    color: inherit;
+    cursor: pointer;
+  }
+  .fave svg {
+    width: 1.3rem;
+    height: 1.3rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+  }
+  .fave[aria-pressed="true"] {
+    color: var(--at-primary);
+  }
+  .fave[aria-pressed="true"] svg {
+    fill: currentColor;
+  }
+  .fave:hover {
+    background: var(--at-bg-elevated);
+  }
+  .grid h2 {
+    margin-top: 0.25rem;
+  }
+  .meta {
+    font-weight: 650;
+  }
+  .grid ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0;
+    list-style: none;
+  }
+  .grid li {
+    padding: 0.2rem 0.5rem;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-size: 0.85rem;
+  }
+  .empty {
+    padding: 3rem 0;
+    font-size: 1.2rem;
+  }
+  .banner {
+    margin-block: 1.5rem 0;
+    padding: 1rem;
+    border: 1px solid currentcolor;
+    background: var(--at-warning-soft);
+    font-weight: 650;
+  }
+  .program-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+    align-items: center;
+    margin-block: 1rem;
+    padding: 1rem;
+    border: 1px solid currentcolor;
+    background: var(--at-bg-alt);
+  }
+  .program-count {
+    flex: 1 1 16rem;
+    margin: 0;
+    font-weight: 700;
+  }
+  .only-mine {
+    min-height: 44px;
+    padding: 0.65rem 0.9rem;
+    border: 1px solid currentcolor;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .only-mine:hover {
+    background: var(--at-bg-elevated);
+  }
+  .only-mine[aria-pressed="true"] {
+    background: var(--at-primary);
+    color: var(--at-on-primary);
+  }
+  .only-mine[aria-pressed="true"]:hover {
+    background: var(--at-primary-hover);
+  }
+  .builder-link {
+    font-weight: 700;
+  }
+  @media (max-width: 60rem) {
+    .filters {
+      grid-template-columns: 1fr 1fr;
+    }
+    .filters .wide {
+      grid-column: 1/-1;
+    }
+    .reset {
+      grid-column: 1/-1;
+    }
+  }
+  @media (max-width: 40rem) {
+    .filters {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>
