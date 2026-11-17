@@ -25,8 +25,8 @@ const masters = AWARDS.find((a) => a.id === "masters")!;
 
 /** A selection satisfying an award exactly, as levels. */
 const levelsFor = (award: typeof undergraduate): Level[] =>
-  award.requirements.flatMap(
-    ({ level, count }) => Array.from<number>({ length: count }).fill(level) as Level[],
+  award.requirements.flatMap(({ level, count }) =>
+    Array.from<Level>({ length: count }).fill(level),
   );
 
 describe("levelOf", () => {

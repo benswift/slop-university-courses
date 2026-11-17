@@ -46,7 +46,7 @@ const results = await Promise.all(
         reused: false,
       };
     } catch (error) {
-      return { apiUrl, error: (error as Error).message };
+      return { apiUrl, error: error instanceof Error ? error.message : String(error) };
     }
   }),
 );

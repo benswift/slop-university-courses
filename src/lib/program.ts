@@ -61,7 +61,13 @@ const SHORT_CODE = /^([1-4]|[6-8])\d{3}$/;
 
 /** The level is the digit after the prefix; the code pattern guarantees it. */
 export function levelOf(code: string): Level {
-  return Number(code[4]) as Level;
+  const level = Number(code[4]);
+  if (!isLevel(level)) throw new Error(`"${code}" has no course level (digit ${level})`);
+  return level;
+}
+
+function isLevel(n: number): n is Level {
+  return n === 1 || n === 2 || n === 3 || n === 4 || n === 6 || n === 7 || n === 8;
 }
 
 /** Sorted, deduplicated and capped. Sorting is what makes two equal selections

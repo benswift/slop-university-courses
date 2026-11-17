@@ -12,7 +12,9 @@ export const NAME_KEY = "slopu:program-name";
 export function readCodes(): string[] {
   try {
     const raw = localStorage.getItem(CODES_KEY);
-    return normaliseCodes(raw ? (JSON.parse(raw) as string[]) : []);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return normaliseCodes(parsed.filter((c): c is string => typeof c === "string"));
   } catch {
     return [];
   }
